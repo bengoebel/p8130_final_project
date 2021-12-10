@@ -1,0 +1,123 @@
+---
+title: "SLR Plots"
+author: "Louis Sharp"
+date: "11/17/2021"
+output: github_document
+---
+
+```{r, message = F}
+library(tidyverse)
+library(patchwork)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+
+```{r, message = F}
+cdi_df = read_csv("./data/cdi.csv") %>% 
+  mutate(crime_rate_1k = (crimes/pop)*1000) %>% 
+  relocate(crime_rate_1k, .before = id) %>% 
+  mutate(region = as.factor(region),
+         region = fct_recode(region, "northeast" = "1", "north_central" = "2",
+                             "south" = "3", "west" = "4"))
+```
+
+```{r}
+cdi_df %>% 
+  ggplot(aes(x = area, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = pop, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = pop18, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = pop65, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = docs, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = beds, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = hsgrad, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = bagrad, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = unemp, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = pcincome, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = totalinc, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = region, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = poverty, y = crime_rate_1k)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+lm(crime_rate_1k ~ poverty, data = cdi_df) %>% 
+  summary()
+
+cdi_df %>% 
+  ggplot(aes(x = hsgrad, y = poverty)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = bagrad, y = poverty)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+
+cdi_df %>% 
+  ggplot(aes(x = pcincome, y = poverty)) +
+  geom_point(aes(color = region), alpha = 0.5) +
+  geom_smooth(method = lm)
+```
+

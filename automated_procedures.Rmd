@@ -1,0 +1,228 @@
+---
+title: "Automated Model Building"
+author: "Louis Sharp"
+date: "12/3/2021"
+output: github_document
+---
+
+```{r, packages, message = F}
+library(tidyverse)
+library(corrplot)
+```
+
+## Non-transformed variables
+
+```{r, data import, message = F}
+cdi_df = read_csv("./data/cdi.csv") %>% 
+  mutate(crime_rate_1k = (crimes/pop)*1000) %>% 
+  relocate(crime_rate_1k, .before = id)
+         
+cdi_regression_df = 
+  cdi_df %>% 
+  select(!(id:state))
+```
+
+Removed id, city, and state variables from the data set as those are not numerical variables and as such we cannot do regression on them. id is numerical but not actual data.
+
+```{r, correlation plot1}
+#pairs(cdi_regression_df) not super informative
+
+corrplot(cor(cdi_regression_df), type = "upper", diag = FALSE)
+
+par(mfrow = c(3, 5))
+boxplot(pull(cdi_regression_df, crime_rate_1k), main = "crime_rate_1k")
+boxplot(pull(cdi_regression_df, area), main = "area")
+boxplot(pull(cdi_regression_df, pop), main = "pop")
+boxplot(pull(cdi_regression_df, pop18), main = "pop18")
+boxplot(pull(cdi_regression_df, pop65), main = "pop65")
+boxplot(pull(cdi_regression_df, docs), main = "docs")
+boxplot(pull(cdi_regression_df, beds), main = "beds")
+boxplot(pull(cdi_regression_df, crimes), main = "crimes")
+boxplot(pull(cdi_regression_df, hsgrad), main = "hsgrad")
+boxplot(pull(cdi_regression_df, bagrad), main = "bagrad")
+boxplot(pull(cdi_regression_df, poverty), main = "poverty")
+boxplot(pull(cdi_regression_df, unemp), main = "unemp")
+boxplot(pull(cdi_regression_df, pcincome), main = "pcincome")
+boxplot(pull(cdi_regression_df, totalinc), main = "totalinc")
+boxplot(pull(cdi_regression_df, region), main = "region")
+```
+
+Check for correlation, normal distribution.
+
+```{r, backward elimination1}
+all_vars_model = lm(crime_rate_1k ~ ., data = cdi_regression_df)
+summary(all_vars_model)
+
+back_elim = update(all_vars_model, . ~ . -hsgrad)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -docs)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -unemp)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -pop)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -bagrad)
+summary(back_elim)
+
+step(all_vars_model, direction = "backward")
+```
+
+```{r, forward selection1}
+step(all_vars_model, direction = "forward")
+```
+
+Automatic forward selection: 12 variables.
+
+```{r}
+step(all_vars_model, direction = "both")
+```
+
+Automatic: 7 variables.
+
+Using manual backwards elimination, we have a model with 9 variables. Using the automatic step function, we have the same model but with bagrad as well (cutoff differences?).\
+Removing crimes (since it is obviously correlated with crime_rate_1k), we get a different model.
+
+```{r, backward2}
+cdi_regression_df = 
+  cdi_df %>% 
+  select(!(id:state), -crimes)
+
+all_vars_model = lm(crime_rate_1k ~ ., data = cdi_regression_df)
+summary(all_vars_model)
+
+back_elim = update(all_vars_model, . ~ . -hsgrad)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -unemp)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -bagrad)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -docs)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -pop65)
+summary(back_elim)
+
+step(all_vars_model, direction = "backward")
+```
+
+Manual: 8 variables, automatic: 10 (pop65 + docs added). Likely due to cutoff differences.
+
+```{r, backward3}
+cdi_regression_df = 
+  cdi_df %>% 
+  select(!(id:state), -crimes, -region)
+
+all_vars_model = lm(crime_rate_1k ~ ., data = cdi_regression_df)
+summary(all_vars_model)
+
+back_elim = update(all_vars_model, . ~ . -hsgrad)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -bagrad)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -pop65)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -docs)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -area)
+summary(back_elim)
+
+step(all_vars_model, direction = "backward")
+```
+
+Manual: 7 variables, automatic: 7 variables.
+
+```{r, forward selection3}
+step(all_vars_model, direction = "forward")
+```
+
+Automatic forward selection: 12 variables.
+
+```{r}
+step(all_vars_model, direction = "both")
+```
+
+Automatic: 7 variables.
+
+## With transformed variables
+
+Population density = Population / Area\
+Percent doctors = Doctors / Population\
+Percent beds = Beds / Population\
+Region as dummy/indicator variable
+
+```{r, data import2, message = F}
+cdi_df2 = read_csv("./data/cdi.csv") %>% 
+  mutate(crime_rate_1k = (crimes/pop)*1000,
+         popdensity = pop/area,
+         pctdocs = docs/pop,
+         pctbeds = beds/pop,
+         region = as.factor(region),
+         region = fct_recode(region, "northeast" = "1", "north_central" = "2",
+                             "south" = "3", "west" = "4")) %>% 
+  relocate(crime_rate_1k, .before = id) %>% 
+  relocate(popdensity, .after = crime_rate_1k)
+
+cdi_regression_df2 = 
+  cdi_df2 %>% 
+  select(!(id:state), -crimes, -area, -pop, -docs, -beds)
+```
+
+Removed id, city, and state variables from the data set as those are not numerical variables and as such we cannot do regression on them. id is numerical but not actual data.\
+Created population density, percent docs, percent beds, and region dummy/indicator variable. As such, removed crimes as crime_rate_1k is a function of crimes, removed population and area as density is a function of those variables, and same rationale for docs and beds. Instead of absolute numbers, using percentages and ratios for regression.
+
+```{r, correlation plot2}
+#pairs(cdi_regression_df) not super informative
+
+cdi_regression_df_no_reg =
+  cdi_regression_df2 %>% 
+  select(-region)
+  
+corrplot(cor(cdi_regression_df_no_reg), type = "upper", diag = FALSE)
+
+par(mfrow = c(3, 5))
+boxplot(pull(cdi_regression_df2, crime_rate_1k), main = "crime_rate_1k")
+boxplot(pull(cdi_regression_df2, popdensity), main = "popdensity")
+#boxplot(pull(cdi_regression_df, area), main = "area")
+#boxplot(pull(cdi_regression_df, pop), main = "pop")
+boxplot(pull(cdi_regression_df2, pop18), main = "pop18")
+boxplot(pull(cdi_regression_df2, pop65), main = "pop65")
+boxplot(pull(cdi_regression_df2, pctdocs), main = "pctdocs")
+boxplot(pull(cdi_regression_df2, pctbeds), main = "pctbeds")
+#boxplot(pull(cdi_regression_df, crimes), main = "crimes")
+boxplot(pull(cdi_regression_df2, hsgrad), main = "hsgrad")
+boxplot(pull(cdi_regression_df2, bagrad), main = "bagrad")
+boxplot(pull(cdi_regression_df2, poverty), main = "poverty")
+boxplot(pull(cdi_regression_df2, unemp), main = "unemp")
+boxplot(pull(cdi_regression_df2, pcincome), main = "pcincome")
+boxplot(pull(cdi_regression_df2, totalinc), main = "totalinc")
+#boxplot(pull(cdi_regression_df2, region), main = "region")
+```
+
+Check for correlation, normal distribution.
+
+```{r, backward elimination4}
+all_vars_model = lm(crime_rate_1k ~ ., data = cdi_regression_df2)
+summary(all_vars_model)
+
+back_elim = update(all_vars_model, . ~ . -pctdocs)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -pop65)
+summary(back_elim)
+back_elim = update(back_elim, . ~ . -unemp)
+summary(back_elim)
+
+step(all_vars_model, direction = "backward")
+```
+
+Using manual backwards elimination, we have a model with 9 variables. Using the automatic step function, we have the same model.
+
+```{r, forward selection4}
+step(all_vars_model, direction = "forward")
+```
+
+The automated forward selection process includes all variable from automated backwards elimination plus pop65, unemp, and pctdocs.
+
+```{r}
+step(all_vars_model, direction = "both")
+```
+
+The automated stepwise regression function includes the same variables as the automated backwards selection function.
