@@ -1,0 +1,210 @@
+---
+title: "BIC Model Analysis"
+author: "Jesse R. Ames"
+date: "12/10/2021"
+output: pdf_document
+---
+
+Goal: Build a model to explain crime rate in 440 U.S. counties from 1990 to 1992
+
+```{r}
+library(tidyverse)
+
+cdi <- read_csv("cdi.csv")
+
+#Check for correlations among the predictors; create new variables
+aug_cdi <- cdi %>%
+  mutate(
+    crm_1000 = crimes/(pop/1000), #crime per 1000 people 
+    pop_density = pop/area, #population density
+    region = case_when(
+      region == 1 ~ "Northeast",
+      region == 2 ~ "North Central",
+      region == 3 ~ "South",
+      region == 4 ~ "West")
+  )
+aug_cdi %>%
+  select(area:count65, -region) %>% 
+  do(as.data.frame(cor(., method="pearson", use="pairwise.complete.obs")))
+```
+
+`pop`, `docs`, `beds`, and `totalinc` are all strongly correlated (>0.90); we should only include one of these four in our model.
+
+Next we consider some bivariate plots:
+
+```{r}
+library(GGally)
+
+aug_cdi %>%
+  ggpairs(columns = c("pop_density","pop18", "pop65", "docs"),
+          mapping = aes(group = region, color = region, alpha = 0.5),
+          columnLabels = c("Pop. Density (n/mi.^2)", "Pct. 18-34","Pct. 65+", "No. of doctors"))
+```
+
+There is a moderate negative correlation between percentage of 18-34 year olds and percentage of 65+ year olds, and a moderate positive correlation between higher population density and more doctors; otherwise these predictors are not strongly correlated. The distributions of percent 18-34 and percent 65+ are relatively normal looking with a bit of right skew. Number of doctors and population density are strongly right skewed.
+
+```{r}
+aug_cdi %>%
+  ggpairs(columns = c("beds","hsgrad", "bagrad", "poverty"),
+          mapping = aes(group = region, color = region, alpha = 0.5),
+          columnLabels = c("Hospital beds", "Pct. HS graduate","Pct. BA", "Pct. poverty"))
+```
+
+As one might expect, there is a moderately strong positive correlation between percentage of high school graduates and percentage of college graduates, and moderately strong negative correlations between percentage of poverty and percentage of graduates. The distributions of graduation percentages and poverty rates are relatively bell shaped with some skewness, while number of hospital beds is strongly right skewed.
+
+```{r}
+aug_cdi %>%
+  ggpairs(columns = c("unemp","pcincome", "totalinc", "pop18"),
+          mapping = aes(group = region, color = region, alpha = 0.5),
+          columnLabels = c("Pct. unemployment", "Per capita income", "Total income", "Pct. 18-34"))
+```
+
+Unemployment rate has a moderate negative correlation with per capita income, but almost no correlation with total income. Total income and per capita income have a weak to moderate positive correlation,  while unemployment has a weak to moderate negative correlation with percentage 18-34. Total income has a strongly right-skewed distribution, while percent unemployed and per capita income are relatively bell-shaped.
+
+```{r}
+#Build full linear model, BIC backwards selection
+model_df <- aug_cdi %>%
+  select(state:pop_density) %>%
+  select(-c(pop, area, beds, docs, crimes))
+
+no_interact <- lm(crm_1000~., data = model_df)
+
+bic_model <- step(no_interact, direction = "backward", trace = FALSE, k = log(nobs(no_interact)))
+
+summary(bic_model)
+```
+
+With no interactions, we can only explain 44% of the variation with this model. What if we add interactions? We'll remove state as to avoid making a crazy number of terms to calculate
+
+```{r}
+model_df2 <- model_df %>% select(-state)
+
+interact_fit <- lm(crm_1000~.^2, data = model_df2)
+
+bic_model2 <- step(interact_fit, direction = "backward", trace = FALSE, k = log(nobs(interact_fit)))
+
+summary(bic_model2)
+```
+
+This model is much bigger but still only catches 69% of the variation. What if we add state back in?
+
+```{r}
+interact_state <- lm(crm_1000~.^2, data = model_df)
+
+bic_model3 <- step(interact_state, direction = "backward", trace = FALSE, k = log(nobs(interact_state)))
+
+summary(bic_model3)
+```
+
+That's interesting - adding more variables to the model actually hurt the backwards regression by getting it stuck in a local minimum BIC. Maybe we can refine the second model by making the terms more normal.
+
+```{r}
+#Pop density
+model_df2 %>%
+  ggplot(aes(x = pop_density)) +
+  geom_histogram()
+
+#Natural log pop density
+model_df2 %>%
+  ggplot(aes(x = log(pop_density))) +
+  geom_histogram()
+
+#Total income
+model_df2 %>%
+  ggplot(aes(x = totalinc)) +
+  geom_histogram()
+
+#Natural log total income
+model_df2 %>%
+  ggplot(aes(x = log(totalinc))) +
+  geom_histogram()
+
+#Pop pct 18-34
+model_df2 %>%
+ ggplot(aes(x = pop18)) +
+ geom_density()
+
+#Natural log
+model_df2 %>%
+ ggplot(aes(x = log(pop18))) +
+ geom_density()
+
+model_df3 <- model_df2 %>%
+  mutate(log_pop_density = log(pop_density),
+         log_totalinc = log(totalinc),
+         log_pop18 = log(pop18),
+         pop_density = NULL,
+         totalinc = NULL,
+         pop18 = NULL)
+
+interact_transform <- lm(crm_1000~.^2, data = model_df3)
+bic_model4 <- step(interact_transform, direction = "backward", trace = FALSE,
+                   k = log(nobs(interact_transform)))
+
+summary(bic_model4)
+```
+
+That's strange. This model seems worse than the model without transformed variables (and it's also not very parsimonious)
+
+What happens if we fit a simpler linear model with the transformed variables?
+
+```{r}
+lin_transform <- lm(crm_1000 ~., data = model_df3)
+
+bic_model5 <- step(lin_transform, direction = "backward", trace = FALSE,
+                   k = log(nobs(interact_transform)))
+summary(bic_model5)
+
+model_df2 %>%
+ ggplot(aes(x = log(pop18))) +
+ geom_density()
+```
+
+Let's compare these models by cross-validating with Monte Carlo simulations
+
+```{r}
+library(modelr)
+set.seed(15)
+
+aug_cdi <- aug_cdi %>%
+  mutate(log_pop_density = log(pop_density),
+         log_totalinc = log(totalinc),
+         log_pop18 = log(pop18))
+
+cv_df <- crossv_mc(aug_cdi, n = 100)
+    
+cv_df <- cv_df %>% 
+  mutate(
+    #BIC model 1
+    model_1  = map(train, ~bic_model, data = model_df),
+
+    #Model 2
+    model_2  = map(train, ~bic_model2, data = model_df2),
+
+    #Model 3
+    model_3  = map(train, ~bic_model3, data = model_df),
+    
+    #Model 4
+    model_4 = map(train, ~bic_model4, data = model_df3),
+
+    #Model 5
+    model_5 = map(train, ~bic_model5, data = model_df3)) %>% 
+  mutate(
+    rmse_model_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+    rmse_model_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y)),
+    rmse_model_3 = map2_dbl(model_3, test, ~rmse(model = .x, data = .y)),
+    rmse_model_4 = map2_dbl(model_4, test, ~rmse(model = .x, data = .y)),
+    rmse_model_5 = map2_dbl(model_5, test, ~rmse(model = .x, data = .y)))
+
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse, fill = model)) + geom_violin() + labs(x = "Model", y = "RMSE")
+```
+
+
