@@ -24,7 +24,7 @@ aug_cdi <- cdi %>%
       region == 4 ~ "West")
   )
 aug_cdi %>%
-  select(area:count65, -region) %>% 
+  select(area:pop65, -region) %>% 
   do(as.data.frame(cor(., method="pearson", use="pairwise.complete.obs")))
 ```
 
@@ -133,9 +133,11 @@ model_df3 <- model_df2 %>%
   mutate(log_pop_density = log(pop_density),
          log_totalinc = log(totalinc),
          log_pop18 = log(pop18),
+         log_poverty = log(poverty),
          pop_density = NULL,
          totalinc = NULL,
-         pop18 = NULL)
+         pop18 = NULL,
+         poverty = NULL)
 
 interact_transform <- lm(crm_1000~.^2, data = model_df3)
 bic_model4 <- step(interact_transform, direction = "backward", trace = FALSE,
@@ -169,7 +171,8 @@ set.seed(15)
 aug_cdi <- aug_cdi %>%
   mutate(log_pop_density = log(pop_density),
          log_totalinc = log(totalinc),
-         log_pop18 = log(pop18))
+         log_pop18 = log(pop18),
+         log_poverty = log(poverty))
 
 cv_df <- crossv_mc(aug_cdi, n = 100)
     
