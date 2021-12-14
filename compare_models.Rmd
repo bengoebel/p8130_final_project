@@ -1,0 +1,35 @@
+---
+title: "Untitled"
+author: "Brian Jo Hsuan Lee"
+date: "12/14/2021"
+output: html_document
+---
+```{r}
+cdi_df = 
+  read_csv("./data/cdi.csv") %>% 
+  mutate(
+    CRM_1000 = crimes/pop * 1000,
+    dens = pop/area,
+    region = factor(region),
+    state = factor(state),
+    docbed = docs/beds,
+    log_pop18 = log(pop18),
+    log_pop65 = log(pop65),
+    log_hsgrad = log(hsgrad),
+    log_bagrad = log(bagrad),
+    log_poverty = log(poverty),
+    log_unemp = log(unemp),
+    log_pcincome = log(pcincome),
+    log_docbed = log(docbed),
+    log_dens = log(dens)
+  ) %>% 
+  dplyr::select(-id, -cty, -docs, -beds, -totalinc, -crimes, -pop, -area) %>% 
+  dplyr::select(CRM_1000, everything()) %>% 
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, docbed, dens, log_hsgrad, state))
+
+cdi_df = cdi_df[-c(6, 215, 371),]
+
+fit_Brian = lm(CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_dens, data = cdi_df)
+summary(fit_Brian) 
+```
+
