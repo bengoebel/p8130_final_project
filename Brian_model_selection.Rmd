@@ -1,0 +1,174 @@
+---
+title: "P8130 Final Project"
+author: "Brian Jo Hsuan Lee"
+date: "12/10/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(corrplot)
+library(leaps)
+library(MASS) 
+library(caret)
+# setwd("/Users/beelee/Desktop/Columbia/Fall_2021/P8130-Biostatistical_Methods_1/Project/")
+```
+
+## Exploratory Analysis
+
+```{r}
+# clean, transform, and rid unneeded columns
+cdi_df = 
+  read_csv("cdi.csv") %>% 
+  mutate(
+    CRM_1000 = crimes/pop * 1000,
+    dens = pop/area,
+    region = factor(region),
+    state = factor(state),
+    docbed = docs/beds,
+    log_pop18 = log(pop18),
+    log_pop65 = log(pop65),
+    log_hsgrad = log(hsgrad),
+    log_bagrad = log(bagrad),
+    log_poverty = log(poverty),
+    log_unemp = log(unemp),
+    log_pcincome = log(pcincome),
+    log_docbed = log(docbed),
+    log_dens = log(dens)
+  ) %>% 
+  dplyr::select(-id, -cty, -docs, -beds, -totalinc, -crimes, -pop, -area) %>% 
+  dplyr::select(CRM_1000, everything())
+
+# compare distribution of original and log transformed variables
+boxplot(cdi_df$pop18, main='pop18')
+boxplot(cdi_df$log_pop18, main='pop18') # better
+boxplot(cdi_df$pop65, main='pop65') 
+boxplot(cdi_df$log_pop65, main='pop65') # better
+boxplot(cdi_df$hsgrad, main='hsgrad') # better
+boxplot(cdi_df$log_hsgrad, main='hsgrad') 
+boxplot(cdi_df$bagrad, main='bagrad') 
+boxplot(cdi_df$log_bagrad, main='bagrad') # better
+boxplot(cdi_df$poverty, main='poverty')
+boxplot(cdi_df$log_poverty, main='poverty') # better
+boxplot(cdi_df$unemp, main='unemp')
+boxplot(cdi_df$log_unemp, main='unemp') # better
+boxplot(cdi_df$pcincome, main='pcincome')
+boxplot(cdi_df$log_pcincome, main='pcincome') # better
+boxplot(cdi_df$docbed, main='docbed') 
+boxplot(cdi_df$log_docbed, main='docbed') # better
+boxplot(cdi_df$dens, main='dens')
+boxplot(cdi_df$log_dens, main='dens') # better
+
+cdi_df %>%
+  group_by(state) %>% 
+  summarise(n = n()) %>%
+  ggplot() + 
+  geom_col(aes(state, n))
+
+cdi_df %>%
+  group_by(region) %>% 
+  summarise(n = n()) %>%
+  ggplot() + 
+  geom_col(aes(region, n)) # better
+
+# keep the more normally distributed versions
+cdi_df = 
+  cdi_df %>% 
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, docbed, dens, log_hsgrad, state))
+
+# get first full mlr
+fit_1 = lm(CRM_1000 ~ ., data = cdi_df)
+summary(fit_1) # aRs = 0.5309
+boxcox(fit_1) # transform CRM_1000 and raise it to 1/2
+
+# transform Y for a better fit
+t_cdi_df =
+  cdi_df %>% 
+  mutate(
+    t_CRM_1000 = CRM_1000^(1/2)
+  ) %>% 
+  dplyr::select(-CRM_1000)
+
+fit_2 = lm(t_CRM_1000 ~ ., data = t_cdi_df)
+summary(fit_2) # aRs = 0.5616; improved
+boxcox(fit_2) # better
+
+cdi_df = t_cdi_df
+
+# run stepwise and get a list of highly effective predictors
+step(fit_2, direction = 'both')
+
+fit_3 = lm(t_CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_dens, data = cdi_df)
+summary(fit_3) # aRs = 0.5654; improved
+plot(fit_3) # rows 6, 215, 371 seem to contain outliers
+
+# remove those 3 outliers and fit again
+cdi_no_out_df = cdi_df[-c(6, 215, 371),]
+
+fit_4 = lm(t_CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_dens, data = cdi_no_out_df)
+summary(fit_4) # aRs = 0.596; improved
+
+cdi_df = 
+  cdi_no_out_df %>% 
+  dplyr::select(t_CRM_1000, region,  log_pop18, log_poverty, log_pcincome, log_dens)
+
+# check collinearity
+check_collinearity(fit_4) # low correlation
+```
+
+
+```{r}
+fit_5 = lm(t_CRM_1000 ~ .*., data = cdi_df) 
+summary(fit_5) # aRs = 0.6071; improved, but each predictors doesn't seem as significant
+
+fit_6 = lm(t_CRM_1000 ~ .*region, data = cdi_df) 
+summary(fit_6) # aRs = 0.6008, 6 significant coefs
+
+fit_7 = lm(t_CRM_1000 ~ .*log_pop18, data = cdi_df) 
+summary(fit_7) # aRs = 0.5958, 3 significant coefs
+
+fit_8 = lm(t_CRM_1000 ~ .*log_poverty, data = cdi_df) 
+summary(fit_8) # aRs = 0.6003, 4 significant coefs
+
+fit_9 = lm(t_CRM_1000 ~ .*log_pcincome, data = cdi_df) 
+summary(fit_9) # aRs = 0.611, 6 significant coefs
+
+fit_10 = lm(t_CRM_1000 ~ .*log_dens, data = cdi_df) 
+summary(fit_10) # aRs = 0.6043, 8 significant coefs!
+
+fit_11 = lm(t_CRM_1000 ~ (region + log_poverty + log_pcincome + log_dens)*log_dens, data = cdi_df) 
+summary(fit_11) # aRs = 0.5884, 8 significant coefs!
+```
+
+
+```{r}
+# Use 5-fold validation and create the training sets
+train = trainControl(method = "cv", number = 5)
+
+# Fit the 3 best looking models and compare performance: the first is fit 4
+model_1 = train(t_CRM_1000 ~ .,
+                   data = cdi_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_1)
+# the second is fit 10
+model_2 = train(t_CRM_1000 ~ .*log_dens,
+                   data = cdi_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_2)
+
+# the third is fit 11
+model_3 = train(t_CRM_1000 ~ (region + log_poverty + log_pcincome + log_dens)*log_dens,
+                   data = cdi_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_3)
+
+# fit 4 may be the best considering law of parsimony
+```
