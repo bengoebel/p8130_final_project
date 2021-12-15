@@ -44,12 +44,13 @@ get_mod_adj_r_squared <- function(mod) {
   pull(adj.r.squared)
 }
 
-# Purpose: Performs 5-fold cross validation on a model specified by its formula.
+# Purpose: Performs cross validation on a model specified by its formula.
 # Arguments: mod: a variable of type character that is the formula to fit a 
 #            linear model.
 # Returns: A numeric, the model root mean squared error.
 get_cv_rmse <- function(mod) {
-  crossv_kfold(cdi, k = 5) %>%
+  set.seed(1)
+  crossv_mc(cdi, 1000) %>%
   mutate(
     train = map(train, as_tibble),
     test = map(test, as_tibble)
@@ -122,41 +123,12 @@ get_cor_by_var("CRM_1000")
 Now, let's define models of interest.
 ```{r}
 # Define model formulas and put in a list
-fit1 <- "CRM_1000 ~ pop_density + region + poverty + pcincome + poverty*pop_density"
-fit2 <- "CRM_1000 ~ pop_density + poverty"
-fit3 <- "CRM_1000 ~ pop_density + poverty + region"
-fit4 <- "CRM_1000 ~ pop_density + poverty + region + totalinc"
-fit5 <- "CRM_1000 ~ pop_density + poverty + region + pcincome"
-fit6 <- "CRM_1000 ~ pop_density + poverty + region + pcincome + area"
-fit7 <- str_c("CRM_1000 ~ pop_density + region + poverty + pcincome + ", 
-              "region*poverty + region*pcincome")
-fit8 <- str_c("CRM_1000 ~ pop_density + region + poverty + pcincome + ",
-              "poverty*pop_density + region*pcincome")
-fit9 <- str_c("CRM_1000 ~ pop_density + region + poverty + pcincome + ",
-              "poverty*pop_density + region*pcincome + poverty*pcincome")
-fit10 <- str_c("CRM_1000 ~ pop_density + region + poverty + pcincome + hsgrad + ",
-              "poverty*pop_density + region*pcincome")
-fit11 <- str_c("CRM_1000 ~ pop_density + region + poverty + pcincome + hsgrad +",
-               "poverty*pop_density")
-fit12 <- "CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_pop_density"
 fit13 <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_pop18 + log_poverty"
 fit14 <- "CRM_1000 ~ log_pop_density + region + log_poverty + log_pcincome"
 fit15 <- "CRM_1000 ~ log_pop_density + region + log_poverty + log_totalinc"
 
 model_list <-  
   list(
-    f1 = fit1,
-    f2 = fit2,
-    f3 = fit3,
-    f4 = fit4,
-    f5 = fit5,
-    f6 = fit6,
-    f7 = fit7,
-    f8 = fit8,
-    f9 = fit9,
-    f10 = fit10,
-    f11 = fit11,
-    f12 = fit12,
     f13 = fit13,
     f14 = fit14,
     f15 = fit15
@@ -168,7 +140,7 @@ Here is each model's adjusted R-squared value.
 # Get each model's adjusted r-squared
 map(model_list, get_mod_adj_r_squared) %>%
   as_tibble() %>%
-  pivot_longer(f1:f15,
+  pivot_longer(f13:f15,
                names_to = "model",
                values_to = "adj_r_squared") %>%
   arrange(desc(adj_r_squared)) %>%
@@ -177,10 +149,10 @@ map(model_list, get_mod_adj_r_squared) %>%
 
 Here is each model's root mean squared error.
 ```{r}
-# Perform 5-fold cross validation for each model
+# Perform cross validation for each model
 map(model_list, get_cv_rmse) %>%
   as_tibble() %>%
-  pivot_longer(f1:f15,
+  pivot_longer(f13:f15,
                names_to = "model",
                values_to = "RMSE") %>%
   arrange(RMSE) %>%
