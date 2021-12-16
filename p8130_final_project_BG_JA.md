@@ -155,15 +155,15 @@ Now, let’s define models of interest.
 
 ``` r
 # Define model formulas and put in a list
-fit13 <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_pop18 + log_poverty"
-fit14 <- "CRM_1000 ~ log_pop_density + region + log_poverty + log_pcincome"
-fit15 <- "CRM_1000 ~ log_pop_density + region + log_poverty + log_totalinc"
+model_A <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_pop18 + log_poverty"
+model_B <- "CRM_1000 ~ region + log_pop_density + log_pcincome + log_poverty"
+model_C <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_poverty"
 
 model_list <-  
   list(
-    f13 = fit13,
-    f14 = fit14,
-    f15 = fit15
+    model_A = model_A,
+    model_B = model_B,
+    model_C = model_C
   )
 ```
 
@@ -173,18 +173,18 @@ Here is each model’s adjusted R-squared value.
 # Get each model's adjusted r-squared
 map(model_list, get_mod_adj_r_squared) %>%
   as_tibble() %>%
-  pivot_longer(f13:f15,
+  pivot_longer(model_A:model_C,
                names_to = "model",
                values_to = "adj_r_squared") %>%
   arrange(desc(adj_r_squared)) %>%
   knitr::kable()
 ```
 
-| model | adj\_r\_squared |
-|:------|----------------:|
-| f13   |       0.5370508 |
-| f15   |       0.5314421 |
-| f14   |       0.5283651 |
+| model    | adj\_r\_squared |
+|:---------|----------------:|
+| model\_A |       0.5370508 |
+| model\_C |       0.5314421 |
+| model\_B |       0.5283651 |
 
 Here is each model’s cross-validation root mean squared error.
 
@@ -192,7 +192,7 @@ Here is each model’s cross-validation root mean squared error.
 # Perform cross validation for each model
 map(model_list, get_cv_rmse) %>%
   as_tibble() %>%
-  pivot_longer(f13:f15,
+  pivot_longer(model_A:model_C,
                names_to = "model",
                values_to = "RMSE") %>%
   arrange(RMSE) %>%
@@ -206,19 +206,19 @@ Further, we can plot the model residuals as a function of the model
 predictions.
 
 ``` r
-plot_model_residuals(fit13)
+plot_model_residuals(model_A)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ``` r
-plot_model_residuals(fit14)
+plot_model_residuals(model_B)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
-plot_model_residuals(fit15)
+plot_model_residuals(model_C)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
@@ -226,19 +226,19 @@ plot_model_residuals(fit15)
 Q-Q plots
 
 ``` r
-plot_mod_qq(fit13)
+plot_mod_qq(model_A)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 ``` r
-plot_mod_qq(fit14)
+plot_mod_qq(model_B)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 ``` r
-plot_mod_qq(fit15)
+plot_mod_qq(model_C)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
@@ -246,19 +246,19 @@ plot_mod_qq(fit15)
 Leverage plots
 
 ``` r
-plot_mod_leverage(fit13)
+plot_mod_leverage(model_A)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ``` r
-plot_mod_leverage(fit14)
+plot_mod_leverage(model_B)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ``` r
-plot_mod_leverage(fit15)
+plot_mod_leverage(model_C)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
@@ -272,24 +272,24 @@ cdi_2 <- cdi %>% slice(-6)
 # Get each model's adjusted r-squared
 map(model_list, get_mod_adj_r_squared, data = cdi_2) %>%
   as_tibble() %>%
-  pivot_longer(f13:f15,
+  pivot_longer(model_A:model_C,
                names_to = "model",
                values_to = "adj_r_squared") %>%
   arrange(desc(adj_r_squared)) %>%
   knitr::kable()
 ```
 
-| model | adj\_r\_squared |
-|:------|----------------:|
-| f13   |       0.5779819 |
-| f14   |       0.5723062 |
-| f15   |       0.5682312 |
+| model    | adj\_r\_squared |
+|:---------|----------------:|
+| model\_A |       0.5779819 |
+| model\_B |       0.5723062 |
+| model\_C |       0.5682312 |
 
 ``` r
 # Perform cross validation for each model
 map(model_list, get_cv_rmse, data = cdi_2) %>%
   as_tibble() %>%
-  pivot_longer(f13:f15,
+  pivot_longer(model_A:model_C,
                names_to = "model",
                values_to = "RMSE") %>%
   arrange(RMSE) %>%
@@ -301,57 +301,75 @@ map(model_list, get_cv_rmse, data = cdi_2) %>%
 
 ``` r
 #Residual plots
-plot_model_residuals(fit13, data = cdi_2)
+plot_model_residuals(model_A, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-2.png)<!-- -->
 
 ``` r
-plot_model_residuals(fit14, data = cdi_2)
+plot_model_residuals(model_B, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-3.png)<!-- -->
 
 ``` r
-plot_model_residuals(fit15, data = cdi_2)
+plot_model_residuals(model_C, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-4.png)<!-- -->
 
 ``` r
 #Q-Q plots
-plot_mod_qq(fit13, data = cdi_2)
+plot_mod_qq(model_A, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-5.png)<!-- -->
 
 ``` r
-plot_mod_qq(fit14, data = cdi_2)
+plot_mod_qq(model_B, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-6.png)<!-- -->
 
 ``` r
-plot_mod_qq(fit15, data = cdi_2)
+plot_mod_qq(model_C, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-7.png)<!-- -->
 
 ``` r
 #Leverage plots
-plot_mod_leverage(fit13, data = cdi_2)
+plot_mod_leverage(model_A, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-8.png)<!-- -->
 
 ``` r
-plot_mod_leverage(fit14, data = cdi_2)
+plot_mod_leverage(model_B, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-9.png)<!-- -->
 
 ``` r
-plot_mod_leverage(fit15, data = cdi_2)
+plot_mod_leverage(model_C, data = cdi_2)
 ```
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-10.png)<!-- -->
+
+For reasons listed in the paper, we will use model C. Let’s summarize
+the model.
+
+``` r
+broom::tidy(lm(model_C, data = cdi_2)) %>%
+  knitr::kable()
+```
+
+| term                 |   estimate | std.error |  statistic |  p.value |
+|:---------------------|-----------:|----------:|-----------:|---------:|
+| (Intercept)          | -98.510093 |  9.181019 | -10.729756 | 0.00e+00 |
+| regionnorth\_central |  11.058492 |  2.298291 |   4.811615 | 2.10e-06 |
+| regionsouth          |  25.572291 |  2.235019 |  11.441643 | 0.00e+00 |
+| regionwest           |  18.224954 |  2.786970 |   6.539343 | 0.00e+00 |
+| log\_pop\_density    |   4.555372 |  1.104612 |   4.123956 | 4.47e-05 |
+| log\_totalinc        |   8.316132 |  1.386287 |   5.998855 | 0.00e+00 |
+| log\_poverty         |  21.188450 |  1.605139 |  13.200384 | 0.00e+00 |
