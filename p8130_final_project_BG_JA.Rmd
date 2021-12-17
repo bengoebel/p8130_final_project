@@ -1,14 +1,13 @@
 ---
-title: "p8130_final_project_BG_JA"
-author: "Benjamin Goebel, Jesse Ames"
-date: "12/14/2021"
-output: github_document
+title: "Biostatistical Methods I Final Project"
+author: "Benjamin Goebel (bpg2118), Jesse Ames (jra2186), Louis Sharp (lzs2109), Brian Lee (jl6046)"
+date: "12/17/2021"
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(modelr)
-library(stringr)
 library(patchwork)
 ```
 
@@ -131,8 +130,9 @@ cdi <- read_csv(here::here("data", "cdi.csv")) %>%
   dplyr::select(-id, -state, -cty, -docs, -beds, -crimes, -pop, -area) %>% 
   dplyr::select(CRM_1000, region, everything())
 ```
-
-```{r, message=F, echo=F}
+Let's compare each variable's distribution in the cdi dataset as is and 
+log-transformed to see which is more normal.
+```{r, message=F}
 cdi_long = 
   cdi %>% 
     pivot_longer(
@@ -224,7 +224,7 @@ in the data set and `CRM_1000`.
 get_cor_by_var("CRM_1000")
 ```
 
-Here, we perform stepwise selection based on AIC.
+Next, we can perform stepwise selection based on AIC.
 
 ```{r}
 # keep only the predictors needed to build the model using pcincome as income measure
@@ -260,7 +260,7 @@ fit_8 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop
 ## summary(fit_8) # aRs = 0.5717, 8 significant coefs
 ```
 
-Here, we perform backward elimination based on BIC.
+We can also perform backward elimination based on BIC.
 ```{r}
 totalincome_model_df = 
   cdi %>% 
@@ -300,7 +300,8 @@ map(model_list, get_mod_adj_r_squared) %>%
   knitr::kable()
 ```
 
-Here is each model's cross-validation root mean squared error.
+Here is the distribution of each model's cross-validation root mean squared 
+error.
 ```{r}
 # Perform cross validation for each model
 map(model_list, get_cv_rmse) %>%
@@ -383,7 +384,7 @@ plot_mod_leverage(model_B, data = cdi_2)
 plot_mod_leverage(model_C, data = cdi_2)
 ```
 
-For reasons listed in the paper, we will use model C. Let's summarize the
+For reasons listed in the paper, we will use model B. Let's summarize the
 model.
 ```{r}
 broom::tidy(lm(model_B, data = cdi_2)) %>%

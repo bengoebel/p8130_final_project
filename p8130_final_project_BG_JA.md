@@ -1,7 +1,8 @@
-p8130\_final\_project\_BG\_JA
+Biostatistical Methods I Final Project
 ================
-Benjamin Goebel, Jesse Ames
-12/14/2021
+Benjamin Goebel (bpg2118), Jesse Ames (jra2186), Louis Sharp (lzs2109),
+Brian Lee (jl6046)
+12/17/2021
 
 Let’s define helpful functions.
 
@@ -125,6 +126,83 @@ cdi <- read_csv(here::here("data", "cdi.csv")) %>%
   dplyr::select(CRM_1000, region, everything())
 ```
 
+Let’s compare each variable’s distribution in the cdi dataset as is and
+log-transformed to see which is more normal.
+
+``` r
+cdi_long = 
+  cdi %>% 
+    pivot_longer(
+      pop18:log_pop_density,
+      names_to = "var",
+      values_to = "val"
+    ) %>% 
+  mutate(
+    trans = case_when(grepl('log_', var) ~ 'log',
+                     TRUE ~ 'ori'
+    ),
+    trans = factor(trans, levels = c("ori", "log"), labels =c("Untransformed", "log Transformed")),
+    var = str_replace(var, "log_", ""),
+    var = factor(var, levels = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density"))
+  )
+
+dens_plot_gen = function(v, b){
+  
+  if(!b){
+    cdi_long %>% 
+      filter(var == v) %>% 
+      ggplot(aes(x = val)) +
+      geom_boxplot() +
+      theme_minimal() +
+      theme(
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.text.x=element_blank()
+      ) +
+      facet_grid(var ~ trans, switch = "y", scales = "free") +
+      theme(
+        strip.text.y.left = element_text(angle = 0),
+        strip.text.x = element_blank()
+      )
+  }else{
+    cdi_long %>% 
+      filter(var == v) %>% 
+      ggplot(aes(x = val)) +
+      geom_boxplot() +
+      theme_minimal() +
+      theme(
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.text.x=element_blank()
+      ) +
+      facet_grid(var ~ trans, switch = "y", scales = "free") +
+      theme(
+        strip.text.y.left = element_text(angle = 0)
+      )
+  }
+}
+
+var_list = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density")
+
+plot_1 = dens_plot_gen(var_list[1], T)
+plot_2 = dens_plot_gen(var_list[2], F)
+plot_3 = dens_plot_gen(var_list[3], F)
+plot_4 = dens_plot_gen(var_list[4], F)
+plot_5 = dens_plot_gen(var_list[5], F)
+plot_6 = dens_plot_gen(var_list[6], F)
+plot_7 = dens_plot_gen(var_list[7], F)
+plot_8 = dens_plot_gen(var_list[8], F)
+plot_9 = dens_plot_gen(var_list[9], F)
+
+patch_1 = plot_1 / plot_2 / plot_3 / plot_4 / plot_5 / plot_6 / plot_7 / plot_8 / plot_9
+
+patch_1 + 
+  plot_annotation(title = 'Untransformed and log Transformed Variable Distributions in the CDI Dataset',
+                  theme = theme(plot.title = element_text(size = 14)))
+```
+
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 Based on this boxplot, we decided to log transform all continuous
@@ -159,7 +237,7 @@ get_cor_by_var("CRM_1000")
 | log\_pop65        | 0.0543376 | \-   |
 | log\_unemp        | 0.0362602 | \+   |
 
-Here, we perform stepwise selection based on AIC.
+Next, we can perform stepwise selection based on AIC.
 
 ``` r
 # keep only the predictors needed to build the model using pcincome as income measure
@@ -291,7 +369,7 @@ fit_8 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop
 ## summary(fit_8) # aRs = 0.5717, 8 significant coefs
 ```
 
-Here, we perform backward elimination based on BIC.
+We can also perform backward elimination based on BIC.
 
 ``` r
 totalincome_model_df = 
@@ -365,7 +443,8 @@ map(model_list, get_mod_adj_r_squared) %>%
 | model\_B |       0.5314421 |
 | model\_C |       0.5283651 |
 
-Here is each model’s cross-validation root mean squared error.
+Here is the distribution of each model’s cross-validation root mean
+squared error.
 
 ``` r
 # Perform cross validation for each model
@@ -482,7 +561,7 @@ plot_mod_leverage(model_C, data = cdi_2)
 
 ![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-14-4.png)<!-- -->
 
-For reasons listed in the paper, we will use model C. Let’s summarize
+For reasons listed in the paper, we will use model B. Let’s summarize
 the model.
 
 ``` r
