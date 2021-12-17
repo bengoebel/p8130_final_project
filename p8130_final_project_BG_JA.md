@@ -108,8 +108,8 @@ cdi <- read_csv(here::here("data", "cdi.csv")) %>%
   mutate(CRM_1000 = (crimes/pop) * 1000,
          state = as.factor(state),
          region = as.factor(region),
-         region = fct_recode(region, "northeast" = "1", "north_central" = "2",
-                             "south" = "3", "west" = "4"),
+         region = fct_recode(region, "Northeast" = "1", "North Central" = "2",
+                             "South" = "3", "West" = "4"),
          pop_density = pop/area,
          docbed = docs/beds,
          log_pop18 = log(pop18),
@@ -160,82 +160,162 @@ get_cor_by_var("CRM_1000")
 | log\_unemp        | 0.0362602 | \+   |
 | log\_docbed       | 0.0244917 | \+   |
 
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
 ``` r
-cdi_long = 
+# keep only the predictors needed to build the model using pcincome as income measure
+pcincome_model = 
   cdi %>% 
-    pivot_longer(
-      pop18:log_docbed,
-      names_to = "var",
-      values_to = "val"
-    ) %>% 
-  mutate(
-    trans = case_when(grepl('log_', var) ~ 'log',
-                     TRUE ~ 'ori'
-    ),
-    trans = factor(trans, levels = c("ori", "log"), labels =c("Untransformed", "log Transformed")),
-    var = str_replace(var, "log_", ""),
-    var = factor(var, levels = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density", "docbed"))
-  )
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, totalinc, log_totalinc, docbed, pop_density, log_hsgrad, state))
 
-dens_plot_gen = function(v, b){
-  
-  if(!b){
-    cdi_long %>% 
-      filter(var == v) %>% 
-      ggplot(aes(x = val)) +
-      geom_boxplot() +
-      theme_minimal() +
-      theme(
-        axis.title.y=element_blank(),
-        axis.title.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text.x=element_blank()
-      ) +
-      facet_grid(var ~ trans, switch = "y", scales = "free") +
-      theme(
-        strip.text.y.left = element_text(angle = 0),
-        strip.text.x = element_blank()
-      )
-  }else{
-    cdi_long %>% 
-      filter(var == v) %>% 
-      ggplot(aes(x = val)) +
-      geom_boxplot() +
-      theme_minimal() +
-      theme(
-        axis.title.y=element_blank(),
-        axis.title.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text.x=element_blank()
-      ) +
-      facet_grid(var ~ trans, switch = "y", scales = "free") +
-      theme(
-        strip.text.y.left = element_text(angle = 0)
-      )
-  }
-}
+# get first full mlr
+fit_1 = lm(CRM_1000 ~ ., data = pcincome_model)
+## summary(fit_1) # aRs = 0.5309
+## boxcox(fit_1) # we ignore the square root tranformation for a more sensible interpretation
 
-var_list = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density", "docbed")
-
-plot_1 = dens_plot_gen(var_list[1], T)
-plot_2 = dens_plot_gen(var_list[2], F)
-plot_3 = dens_plot_gen(var_list[3], F)
-plot_4 = dens_plot_gen(var_list[4], F)
-plot_5 = dens_plot_gen(var_list[5], F)
-plot_6 = dens_plot_gen(var_list[6], F)
-plot_7 = dens_plot_gen(var_list[7], F)
-plot_8 = dens_plot_gen(var_list[8], F)
-plot_9 = dens_plot_gen(var_list[9], F)
-plot_10 = dens_plot_gen(var_list[10], F)
-
-patch_1 = plot_1 / plot_2 / plot_3 / plot_4 / plot_5 / plot_6 / plot_7 / plot_8 / plot_9 / plot_10
-
-patch_1 + 
-  plot_annotation(title = 'Untransformed and log Transformed Variable Distributions in the CDI Dataset',
-                  theme = theme(plot.title = element_text(size = 14)))
+# run stepwise and get a list of highly effective predictors
+step(fit_1, direction = 'both')
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+    ## Start:  AIC=2590.75
+    ## CRM_1000 ~ region + hsgrad + log_pop18 + log_pop65 + log_bagrad + 
+    ##     log_poverty + log_unemp + log_pcincome + log_pop_density + 
+    ##     log_docbed
+    ## 
+    ##                   Df Sum of Sq    RSS    AIC
+    ## - hsgrad           1      11.1 149615 2588.8
+    ## - log_pop65        1      25.9 149630 2588.8
+    ## - log_docbed       1      47.3 149651 2588.9
+    ## - log_bagrad       1      67.3 149671 2588.9
+    ## - log_unemp        1     155.9 149760 2589.2
+    ## <none>                         149604 2590.8
+    ## - log_pop18        1     871.6 150476 2591.3
+    ## - log_pcincome     1    4540.0 154144 2601.9
+    ## - log_pop_density  1   18002.3 167607 2638.7
+    ## - region           3   23895.7 173500 2649.9
+    ## - log_poverty      1   28424.7 178029 2665.3
+    ## 
+    ## Step:  AIC=2588.78
+    ## CRM_1000 ~ region + log_pop18 + log_pop65 + log_bagrad + log_poverty + 
+    ##     log_unemp + log_pcincome + log_pop_density + log_docbed
+    ## 
+    ##                   Df Sum of Sq    RSS    AIC
+    ## - log_pop65        1        25 149641 2586.9
+    ## - log_docbed       1        44 149659 2586.9
+    ## - log_bagrad       1        58 149673 2586.9
+    ## - log_unemp        1       172 149787 2587.3
+    ## <none>                         149615 2588.8
+    ## - log_pop18        1       888 150504 2589.4
+    ## + hsgrad           1        11 149604 2590.8
+    ## - log_pcincome     1      4741 154356 2600.5
+    ## - log_pop_density  1     18162 167778 2637.2
+    ## - region           3     24109 173724 2648.5
+    ## - log_poverty      1     36605 186221 2683.1
+    ## 
+    ## Step:  AIC=2586.86
+    ## CRM_1000 ~ region + log_pop18 + log_bagrad + log_poverty + log_unemp + 
+    ##     log_pcincome + log_pop_density + log_docbed
+    ## 
+    ##                   Df Sum of Sq    RSS    AIC
+    ## - log_docbed       1        39 149680 2585.0
+    ## - log_bagrad       1        65 149705 2585.1
+    ## - log_unemp        1       182 149823 2585.4
+    ## <none>                         149641 2586.9
+    ## + log_pop65        1        25 149615 2588.8
+    ## + hsgrad           1        10 149630 2588.8
+    ## - log_pop18        1      1504 151145 2589.3
+    ## - log_pcincome     1      4860 154500 2598.9
+    ## - log_pop_density  1     18197 167838 2635.3
+    ## - region           3     26911 176552 2653.6
+    ## - log_poverty      1     41604 191245 2692.8
+    ## 
+    ## Step:  AIC=2584.97
+    ## CRM_1000 ~ region + log_pop18 + log_bagrad + log_poverty + log_unemp + 
+    ##     log_pcincome + log_pop_density
+    ## 
+    ##                   Df Sum of Sq    RSS    AIC
+    ## - log_bagrad       1        42 149721 2583.1
+    ## - log_unemp        1       174 149853 2583.5
+    ## <none>                         149680 2585.0
+    ## + log_docbed       1        39 149641 2586.9
+    ## + log_pop65        1        21 149659 2586.9
+    ## + hsgrad           1         7 149672 2586.9
+    ## - log_pop18        1      1472 151152 2587.3
+    ## - log_pcincome     1      4829 154509 2596.9
+    ## - log_pop_density  1     18551 168230 2634.4
+    ## - region           3     27888 177568 2654.2
+    ## - log_poverty      1     44711 194390 2698.0
+    ## 
+    ## Step:  AIC=2583.09
+    ## CRM_1000 ~ region + log_pop18 + log_poverty + log_unemp + log_pcincome + 
+    ##     log_pop_density
+    ## 
+    ##                   Df Sum of Sq    RSS    AIC
+    ## - log_unemp        1       132 149854 2581.5
+    ## <none>                         149721 2583.1
+    ## + log_bagrad       1        42 149680 2585.0
+    ## + log_pop65        1        27 149694 2585.0
+    ## + log_docbed       1        16 149705 2585.1
+    ## + hsgrad           1         1 149720 2585.1
+    ## - log_pop18        1      2731 152452 2589.1
+    ## - log_pcincome     1      8413 158134 2605.2
+    ## - log_pop_density  1     18534 168255 2632.4
+    ## - region           3     29058 178780 2655.1
+    ## - log_poverty      1     44988 194710 2696.7
+    ## 
+    ## Step:  AIC=2581.48
+    ## CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + 
+    ##     log_pop_density
+    ## 
+    ##                   Df Sum of Sq    RSS    AIC
+    ## <none>                         149854 2581.5
+    ## + log_unemp        1       132 149721 2583.1
+    ## + log_pop65        1        31 149823 2583.4
+    ## + log_docbed       1        25 149829 2583.4
+    ## + hsgrad           1        10 149844 2583.4
+    ## + log_bagrad       1         1 149853 2583.5
+    ## - log_pop18        1      2657 152511 2587.2
+    ## - log_pcincome     1      8281 158135 2603.2
+    ## - log_pop_density  1     18596 168450 2630.9
+    ## - region           3     31014 180868 2658.2
+    ## - log_poverty      1     51449 201303 2709.3
+
+    ## 
+    ## Call:
+    ## lm(formula = CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + 
+    ##     log_pop_density, data = pcincome_model)
+    ## 
+    ## Coefficients:
+    ##         (Intercept)  regionNorth Central          regionSouth  
+    ##            -495.713                8.469               22.131  
+    ##          regionWest            log_pop18          log_poverty  
+    ##              20.054               18.008               31.676  
+    ##        log_pcincome      log_pop_density  
+    ##              37.688                7.655
+
+``` r
+fit_2 = lm(CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_pop_density, data = pcincome_model)
+## summary(fit_2) # aRs = 0.5355; improved with 8 significant coefs
+## plot(fit_2) # rows 6, 215, 371 seem to contain outliers; treat them as influential observations...
+
+# check collinearity and found low correlation
+## check_collinearity(fit_2)
+
+fit_3 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*(region + log_pop18 + log_poverty + log_pcincome + log_pop_density), data = pcincome_model) 
+## summary(fit_3) # aRs = 0.5748; improved, but each predictor doesn't seem as significant
+fit_4 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*region, data = pcincome_model) 
+## summary(fit_4) # aRs = 0.5437, 6 significant coefs
+fit_5 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_pop18, data = pcincome_model) 
+## summary(fit_5) # aRs = 0.5358, 2 significant coefs
+fit_6 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_poverty, data = pcincome_model) 
+## summary(fit_6) # aRs = 0.562, 6 significant coefs
+fit_7 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_pcincome, data = pcincome_model) 
+## summary(fit_7) # aRs = 0.5553, 4 significant coefs
+fit_8 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_pop_density, data = pcincome_model) 
+## summary(fit_8) # aRs = 0.5717, 8 significant coefs
+```
 
 Now, let’s define models of interest.
 
@@ -286,7 +366,7 @@ map(model_list, get_cv_rmse) %>%
   geom_violin() + labs(x = "Model", y = "RMSE")
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 Further, we can plot the model residuals as a function of the model
 predictions.
@@ -295,19 +375,19 @@ predictions.
 plot_model_residuals(model_A)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_B)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_C)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 Q-Q plots
 
@@ -315,19 +395,19 @@ Q-Q plots
 plot_mod_qq(model_A)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_B)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_C)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 Leverage plots
 
@@ -335,19 +415,19 @@ Leverage plots
 plot_mod_leverage(model_A)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_B)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_C)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
 No wonder we had those weird distributions of RMSE in the Monte Carlo
 simulations - we had a serious outlier. Let’s remove it and refit and
@@ -383,64 +463,64 @@ map(model_list, get_cv_rmse, data = cdi_2) %>%
   geom_violin() + labs(x = "Model", y = "RMSE")
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
 ``` r
 #Residual plots
 plot_model_residuals(model_A, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-2.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-2.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_B, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-3.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-3.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_C, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-4.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-4.png)<!-- -->
 
 ``` r
 #Q-Q plots
 plot_mod_qq(model_A, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-5.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-5.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_B, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-6.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-6.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_C, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-7.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-7.png)<!-- -->
 
 ``` r
 #Leverage plots
 plot_mod_leverage(model_A, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-8.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-8.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_B, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-9.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-9.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_C, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-10.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-19-10.png)<!-- -->
 
 For reasons listed in the paper, we will use model C. Let’s summarize
 the model.
@@ -450,12 +530,12 @@ broom::tidy(lm(model_C, data = cdi_2)) %>%
   knitr::kable()
 ```
 
-| term                 |   estimate | std.error |  statistic |  p.value |
-|:---------------------|-----------:|----------:|-----------:|---------:|
-| (Intercept)          | -98.510093 |  9.181019 | -10.729756 | 0.00e+00 |
-| regionnorth\_central |  11.058492 |  2.298291 |   4.811615 | 2.10e-06 |
-| regionsouth          |  25.572291 |  2.235019 |  11.441643 | 0.00e+00 |
-| regionwest           |  18.224954 |  2.786970 |   6.539343 | 0.00e+00 |
-| log\_pop\_density    |   4.555372 |  1.104612 |   4.123956 | 4.47e-05 |
-| log\_totalinc        |   8.316132 |  1.386287 |   5.998855 | 0.00e+00 |
-| log\_poverty         |  21.188450 |  1.605139 |  13.200384 | 0.00e+00 |
+| term                |   estimate | std.error |  statistic |  p.value |
+|:--------------------|-----------:|----------:|-----------:|---------:|
+| (Intercept)         | -98.510093 |  9.181019 | -10.729756 | 0.00e+00 |
+| regionNorth Central |  11.058492 |  2.298291 |   4.811615 | 2.10e-06 |
+| regionSouth         |  25.572291 |  2.235019 |  11.441643 | 0.00e+00 |
+| regionWest          |  18.224954 |  2.786970 |   6.539343 | 0.00e+00 |
+| log\_pop\_density   |   4.555372 |  1.104612 |   4.123956 | 4.47e-05 |
+| log\_totalinc       |   8.316132 |  1.386287 |   5.998855 | 0.00e+00 |
+| log\_poverty        |  21.188450 |  1.605139 |  13.200384 | 0.00e+00 |

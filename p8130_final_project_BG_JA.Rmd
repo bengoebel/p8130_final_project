@@ -10,6 +10,8 @@ library(tidyverse)
 library(modelr)
 library(stringr)
 library(patchwork)
+## library(MASS) 
+## library(performance)
 ```
 
 Let's define helpful functions.
@@ -115,8 +117,8 @@ cdi <- read_csv(here::here("data", "cdi.csv")) %>%
   mutate(CRM_1000 = (crimes/pop) * 1000,
          state = as.factor(state),
          region = as.factor(region),
-         region = fct_recode(region, "northeast" = "1", "north_central" = "2",
-                             "south" = "3", "west" = "4"),
+         region = fct_recode(region, "Northeast" = "1", "North Central" = "2",
+                             "South" = "3", "West" = "4"),
          pop_density = pop/area,
          docbed = docs/beds,
          log_pop18 = log(pop18),
@@ -142,7 +144,7 @@ get_cor_by_var("CRM_1000")
 ```
 
 
-```{r}
+```{r, message=F, echo=F}
 cdi_long = 
   cdi %>% 
     pivot_longer(
@@ -216,6 +218,76 @@ patch_1 +
   plot_annotation(title = 'Untransformed and log Transformed Variable Distributions in the CDI Dataset',
                   theme = theme(plot.title = element_text(size = 14)))
 ```
+
+```{r, message=F, echo=F}
+plot_10 = 
+  cdi %>%
+  group_by(state) %>% 
+  summarise(n = n()) %>%
+  ggplot() + 
+  geom_col(aes(state, n)) +
+  theme(
+    axis.text.x = element_text(angle = 90),
+    axis.title.y=element_blank(),
+    axis.text.y=element_blank(),
+    axis.ticks.y=element_blank()
+  )
+
+plot_11 =
+  cdi %>%
+  group_by(region) %>% 
+  summarise(n = n()) %>%
+  ggplot() + 
+  geom_col(aes(region, n)) +
+  theme(
+    axis.title.y=element_blank(),
+    axis.text.y=element_blank(),
+    axis.ticks.y=element_blank(),
+    axis.ticks.x=element_blank()
+  )
+
+patch_2 = plot_10 / plot_11
+
+patch_2 + 
+  plot_annotation(title = 'Location Frequency Distribution in the CDI Dataset',
+                  theme = theme(plot.title = element_text(size = 14)))
+
+```
+
+```{r}
+# keep only the predictors needed to build the model using pcincome as income measure
+pcincome_model = 
+  cdi %>% 
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, totalinc, log_totalinc, docbed, pop_density, log_hsgrad, state))
+
+# get first full mlr
+fit_1 = lm(CRM_1000 ~ ., data = pcincome_model)
+## summary(fit_1) # aRs = 0.5309
+## boxcox(fit_1) # we ignore the square root tranformation for a more sensible interpretation
+
+# run stepwise and get a list of highly effective predictors
+step(fit_1, direction = 'both')
+fit_2 = lm(CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_pop_density, data = pcincome_model)
+## summary(fit_2) # aRs = 0.5355; improved with 8 significant coefs
+## plot(fit_2) # rows 6, 215, 371 seem to contain outliers; treat them as influential observations...
+
+# check collinearity and found low correlation
+## check_collinearity(fit_2)
+
+fit_3 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*(region + log_pop18 + log_poverty + log_pcincome + log_pop_density), data = pcincome_model) 
+## summary(fit_3) # aRs = 0.5748; improved, but each predictor doesn't seem as significant
+fit_4 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*region, data = pcincome_model) 
+## summary(fit_4) # aRs = 0.5437, 6 significant coefs
+fit_5 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_pop18, data = pcincome_model) 
+## summary(fit_5) # aRs = 0.5358, 2 significant coefs
+fit_6 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_poverty, data = pcincome_model) 
+## summary(fit_6) # aRs = 0.562, 6 significant coefs
+fit_7 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_pcincome, data = pcincome_model) 
+## summary(fit_7) # aRs = 0.5553, 4 significant coefs
+fit_8 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop_density)*log_pop_density, data = pcincome_model) 
+## summary(fit_8) # aRs = 0.5717, 8 significant coefs
+```
+
 
 Now, let's define models of interest.
 ```{r}
