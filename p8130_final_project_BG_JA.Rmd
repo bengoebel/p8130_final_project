@@ -10,8 +10,6 @@ library(tidyverse)
 library(modelr)
 library(stringr)
 library(patchwork)
-## library(MASS) 
-## library(performance)
 ```
 
 Let's define helpful functions.
@@ -23,10 +21,10 @@ Let's define helpful functions.
 # Arguments: v_name: a variable of type character that is the variable name
 # Returns: A knitted table of correlations.
 get_cor_by_var <- function(v_name) {
-  cdi %>%
+  cdi_slim %>%
   map(~cor(as.numeric(.x), pull(cdi, v_name), method = "pearson")) %>%
   as_tibble() %>%
-  pivot_longer(CRM_1000:log_docbed,
+  pivot_longer(CRM_1000:log_pop_density,
                names_to = "variables",
                values_to = "r") %>%
   mutate(
@@ -82,7 +80,7 @@ plot_model_residuals <- function(mod, data = cdi) {
   geom_point() +
   theme_bw() +
   labs(
-    title = "Model Residual as a function of Model Prediction"
+    title = ""
   ) +
   theme(plot.title = element_text(hjust = 0.5))
 }
@@ -120,7 +118,6 @@ cdi <- read_csv(here::here("data", "cdi.csv")) %>%
          region = fct_recode(region, "Northeast" = "1", "North Central" = "2",
                              "South" = "3", "West" = "4"),
          pop_density = pop/area,
-         docbed = docs/beds,
          log_pop18 = log(pop18),
          log_pop65 = log(pop65),
          log_hsgrad = log(hsgrad),
@@ -129,26 +126,17 @@ cdi <- read_csv(here::here("data", "cdi.csv")) %>%
          log_unemp = log(unemp),
          log_totalinc = log(totalinc),
          log_pcincome = log(pcincome),
-         log_pop_density = log(pop_density),
-         log_docbed = log(docbed)
+         log_pop_density = log(pop_density)
          ) %>% 
-  dplyr::select(-id, -cty, -docs, -beds, -crimes, -pop, -area) %>% 
-  dplyr::select(CRM_1000, state, region, everything())
+  dplyr::select(-id, -state, -cty, -docs, -beds, -crimes, -pop, -area) %>% 
+  dplyr::select(CRM_1000, region, everything())
 ```
-
-Let's calculate the Pearson's correlation coefficient between every variable
-in the data set and `CRM_1000`.
-
-```{r warning=FALSE}
-get_cor_by_var("CRM_1000")
-```
-
 
 ```{r, message=F, echo=F}
 cdi_long = 
   cdi %>% 
     pivot_longer(
-      pop18:log_docbed,
+      pop18:log_pop_density,
       names_to = "var",
       values_to = "val"
     ) %>% 
@@ -158,7 +146,7 @@ cdi_long =
     ),
     trans = factor(trans, levels = c("ori", "log"), labels =c("Untransformed", "log Transformed")),
     var = str_replace(var, "log_", ""),
-    var = factor(var, levels = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density", "docbed"))
+    var = factor(var, levels = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density"))
   )
 
 dens_plot_gen = function(v, b){
@@ -199,7 +187,7 @@ dens_plot_gen = function(v, b){
   }
 }
 
-var_list = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density", "docbed")
+var_list = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density")
 
 plot_1 = dens_plot_gen(var_list[1], T)
 plot_2 = dens_plot_gen(var_list[2], F)
@@ -210,55 +198,39 @@ plot_6 = dens_plot_gen(var_list[6], F)
 plot_7 = dens_plot_gen(var_list[7], F)
 plot_8 = dens_plot_gen(var_list[8], F)
 plot_9 = dens_plot_gen(var_list[9], F)
-plot_10 = dens_plot_gen(var_list[10], F)
 
-patch_1 = plot_1 / plot_2 / plot_3 / plot_4 / plot_5 / plot_6 / plot_7 / plot_8 / plot_9 / plot_10
+patch_1 = plot_1 / plot_2 / plot_3 / plot_4 / plot_5 / plot_6 / plot_7 / plot_8 / plot_9
 
 patch_1 + 
   plot_annotation(title = 'Untransformed and log Transformed Variable Distributions in the CDI Dataset',
                   theme = theme(plot.title = element_text(size = 14)))
 ```
 
-```{r, message=F, echo=F}
-plot_10 = 
-  cdi %>%
-  group_by(state) %>% 
-  summarise(n = n()) %>%
-  ggplot() + 
-  geom_col(aes(state, n)) +
-  theme(
-    axis.text.x = element_text(angle = 90),
-    axis.title.y=element_blank(),
-    axis.text.y=element_blank(),
-    axis.ticks.y=element_blank()
-  )
+Based on this boxplot, we decided to log transform all continuous variables
+except high school graduation. We can remove all unused variables now.
 
-plot_11 =
-  cdi %>%
-  group_by(region) %>% 
-  summarise(n = n()) %>%
-  ggplot() + 
-  geom_col(aes(region, n)) +
-  theme(
-    axis.title.y=element_blank(),
-    axis.text.y=element_blank(),
-    axis.ticks.y=element_blank(),
-    axis.ticks.x=element_blank()
-  )
-
-patch_2 = plot_10 / plot_11
-
-patch_2 + 
-  plot_annotation(title = 'Location Frequency Distribution in the CDI Dataset',
-                  theme = theme(plot.title = element_text(size = 14)))
-
+```{r}
+cdi_slim <-  
+  cdi %>% 
+  select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, totalinc, 
+            pop_density, log_hsgrad))
 ```
+
+
+Now, let's calculate the Pearson's correlation coefficient between every variable
+in the data set and `CRM_1000`.
+
+```{r warning=FALSE}
+get_cor_by_var("CRM_1000")
+```
+
+Here, we perform stepwise selection based on AIC.
 
 ```{r}
 # keep only the predictors needed to build the model using pcincome as income measure
 pcincome_model = 
   cdi %>% 
-  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, totalinc, log_totalinc, docbed, pop_density, log_hsgrad, state))
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, totalinc, log_totalinc, pop_density, log_hsgrad))
 
 # get first full mlr
 fit_1 = lm(CRM_1000 ~ ., data = pcincome_model)
@@ -288,13 +260,25 @@ fit_8 = lm(CRM_1000 ~ (region + log_pop18 + log_poverty + log_pcincome + log_pop
 ## summary(fit_8) # aRs = 0.5717, 8 significant coefs
 ```
 
+Here, we perform backward elimination based on BIC.
+```{r}
+totalincome_model_df = 
+  cdi %>% 
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, totalinc, log_pcincome, pop_density, log_hsgrad))
+lin_transform <- lm(CRM_1000 ~., data = totalincome_model_df)
+bic_model5 <- step(lin_transform, direction = "backward", trace = FALSE,
+                   k = log(nobs(lin_transform)))
+summary(bic_model5)
+```
 
-Now, let's define models of interest.
+
+Now, let's define our candidate models.
 ```{r}
 # Define model formulas and put in a list
-model_A <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_pop18 + log_poverty"
-model_B <- "CRM_1000 ~ region + log_pop_density + log_pcincome + log_poverty"
-model_C <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_poverty"
+model_A <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_bagrad + log_poverty"
+model_B <- "CRM_1000 ~ region + log_pop_density + log_totalinc + log_poverty"
+model_C <- "CRM_1000 ~ region + log_pop_density + log_pcincome + log_poverty"
+
 
 model_list <-  
   list(
@@ -331,41 +315,28 @@ map(model_list, get_cv_rmse) %>%
 
 Further, we can plot the model residuals as a function of the model predictions.
 ```{r}
-plot_model_residuals(model_A)
-```
-
-```{r}
-plot_model_residuals(model_B)
-```
-
-```{r}
-plot_model_residuals(model_C)
+plot_model_residuals(model_A) +
+plot_model_residuals(model_B) +
+plot_model_residuals(model_C) +
+plot_annotation(title = 'Model Residual as a function of Model Prediction',
+                theme = theme(plot.title = element_text(size = 14)))
 ```
 
 
 Q-Q plots
+
 ```{r}
+par(mfrow = c(1,3))
 plot_mod_qq(model_A)
-```
-
-```{r}
 plot_mod_qq(model_B)
-```
-
-```{r}
 plot_mod_qq(model_C)
 ```
 
 Leverage plots
 ```{r}
+par(mfrow = c(1,3))
 plot_mod_leverage(model_A)
-```
-
-```{r}
 plot_mod_leverage(model_B)
-```
-
-```{r}
 plot_mod_leverage(model_C)
 ```
 
@@ -393,11 +364,15 @@ map(model_list, get_cv_rmse, data = cdi_2) %>%
   geom_violin() + labs(x = "Model", y = "RMSE")
 
 #Residual plots
-plot_model_residuals(model_A, data = cdi_2)
-plot_model_residuals(model_B, data = cdi_2)
-plot_model_residuals(model_C, data = cdi_2)
+plot_model_residuals(model_A, data = cdi_2) + 
+plot_model_residuals(model_B, data = cdi_2) +
+plot_model_residuals(model_C, data = cdi_2) +
+plot_annotation(title = 'Model Residual as a function of Model Prediction',
+                theme = theme(plot.title = element_text(size = 14)))
+  
 
 #Q-Q plots
+par(mfrow = c(1,3))
 plot_mod_qq(model_A, data = cdi_2)
 plot_mod_qq(model_B, data = cdi_2)
 plot_mod_qq(model_C, data = cdi_2)
@@ -411,7 +386,7 @@ plot_mod_leverage(model_C, data = cdi_2)
 For reasons listed in the paper, we will use model C. Let's summarize the
 model.
 ```{r}
-broom::tidy(lm(model_C, data = cdi_2)) %>%
+broom::tidy(lm(model_B, data = cdi_2)) %>%
   knitr::kable()
 ```
 
