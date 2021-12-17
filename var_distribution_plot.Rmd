@@ -11,7 +11,7 @@ cdi_df =
   mutate(
     CRM_1000 = crimes/pop * 1000,
     dens = pop/area,
-    region = factor(region),
+    region = factor(region, labels =c("Northeast", "North Central", "South", "West")),
     state = factor(state),
     docbed = docs/beds,
     log_pop18 = log(pop18),
@@ -39,7 +39,7 @@ cdi_df_long =
     trans = case_when(grepl('log_', var) ~ 'log',
                      TRUE ~ 'ori'
     ),
-    trans = factor(trans, levels = c("ori", "log"), labels =c("Untransformed", "log transformed")),
+    trans = factor(trans, levels = c("ori", "log"), labels =c("Untransformed", "log Transformed")),
     var = str_replace(var, "log_", ""),
     var = factor(var, levels = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "dens", "docbed"))
   )

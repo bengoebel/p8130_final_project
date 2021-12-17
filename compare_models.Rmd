@@ -23,13 +23,188 @@ cdi_df =
     log_docbed = log(docbed),
     log_dens = log(dens)
   ) %>% 
-  dplyr::select(-id, -cty, -docs, -beds, -totalinc, -crimes, -pop, -area) %>% 
   dplyr::select(CRM_1000, everything()) %>% 
-  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, pcincome, docbed, dens, log_hsgrad, state))
+  dplyr::select(-c(id, cty, docs, beds, crimes, pop, area, pop18, pop65, bagrad, poverty, unemp, pcincome, docbed, dens, log_hsgrad, state))
 
-cdi_df = cdi_df[-c(6, 215, 371),]
+cdi_df = cdi_df[-c(6, 279, 123, 215, 368, 371),]
 
+fit_Jesse = lm(CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_dens, data = cdi_df)
+fit_Jesse_skinny = lm(CRM_1000 ~ region + log_poverty + log_pcincome + log_dens, data = cdi_df)
 fit_Brian = lm(CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_dens, data = cdi_df)
+fit_Brian_skinny = lm(CRM_1000 ~ region + log_poverty + log_pcincome + log_dens, data = cdi_df)
+
 summary(fit_Brian) 
+plot(fit_Jesse)
 ```
+279, 69, 402,
+279, 371, 368
+371, 279, 368
+279, 368, 371
+```{r}
+train = trainControl(method = "cv", number = 5)
+model_1 = train(CRM_1000 ~ region + log_pop18 + log_poverty + log_pcincome + log_dens,
+                   data = cdi_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_1) 
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(corrplot)
+library(leaps)
+library(MASS) 
+library(caret)
+library(performance)
+# setwd("/Users/beelee/Desktop/Columbia/Fall_2021/P8130-Biostatistical_Methods_1/Project/p8130_final_project/") # for Brian's use
+```
+
+## Exploratory Analysis
+
+```{r}
+# clean, transform, and rid unneeded columns
+cdi_df = 
+  read_csv("./data/cdi.csv") %>% 
+  mutate(
+    CRM_1000 = crimes/pop * 1000,
+    dens = pop/area,
+    region = factor(region),
+    state = factor(state),
+    docbed = docs/beds,
+    log_pop18 = log(pop18),
+    log_pop65 = log(pop65),
+    log_hsgrad = log(hsgrad),
+    log_bagrad = log(bagrad),
+    log_poverty = log(poverty),
+    log_unemp = log(unemp),
+    log_totalinc = log(totalinc),
+    log_docbed = log(docbed),
+    log_dens = log(dens)
+  ) %>% 
+  dplyr::select(-id, -cty, -docs, -beds, -pcincome, -crimes, -pop, -area) %>% 
+  dplyr::select(CRM_1000, everything())
+
+# keep the more normally distributed versions
+cdi_df = 
+  cdi_df %>% 
+  dplyr::select(-c(pop18, pop65, bagrad, poverty, unemp, totalinc, docbed, dens, log_hsgrad, state))
+
+# pairwise distribution. i don't know how to read this properly
+pairs(cdi_df)
+
+# get first full mlr
+fit_1 = lm(CRM_1000 ~ ., data = cdi_df)
+summary(fit_1) # aRs = 0.5358
+boxcox(fit_1) # transform CRM_1000 and raise it to 1/2
+
+# transform Y for a better fit
+t_cdi_df =
+  cdi_df %>% 
+  mutate(
+    t_CRM_1000 = CRM_1000^(1/2)
+  ) %>% 
+  dplyr::select(-CRM_1000)
+
+fit_2 = lm(t_CRM_1000 ~ ., data = t_cdi_df)
+summary(fit_2) # aRs = 0.5671; improved
+boxcox(fit_2) # better
+
+cdi_df = t_cdi_df
+
+# run stepwise and get a list of highly effective predictors
+step(fit_2, direction = 'both')
+
+fit_3 = lm(t_CRM_1000 ~ region + log_bagrad + log_poverty + log_totalinc + log_dens, data = cdi_df)
+summary(fit_3) # aRs = 0.5679; improved
+plot(fit_3) # rows 6, 215, 371 seem to contain outliers; treat them as influential observations and rule out
+
+# remove those 3 outliers and fit again
+cdi_no_out_df = cdi_df[-c(6, 215, 371),]
+
+fit_4 = lm(t_CRM_1000 ~ region + log_bagrad + log_poverty + log_totalinc + log_dens, data = cdi_no_out_df)
+summary(fit_4) # aRs = 0.597; improved
+
+# replace the working df with the df without influential observations and keep only relevant variables
+cdi_df = 
+  cdi_no_out_df %>% 
+  dplyr::select(t_CRM_1000, region, log_bagrad, log_poverty, log_totalinc, log_dens)
+
+cdi_no_out_df = cdi_df[-c(123, 279, 368),]
+fit_5 = lm(t_CRM_1000 ~ region + log_bagrad + log_poverty + log_totalinc + log_dens, data = cdi_no_out_df)
+summary(fit_5)
+
+# check collinearity and found low correlation
+check_collinearity(fit_4)
+```
+
+
+```{r}
+fit_5 = lm(t_CRM_1000 ~ .*., data = cdi_df) 
+summary(fit_5) # aRs = 0.6071; improved, but each predictor doesn't seem as significant
+
+fit_6 = lm(t_CRM_1000 ~ .*region, data = cdi_df) 
+summary(fit_6) # aRs = 0.6008, 6 significant coefs
+
+fit_7 = lm(t_CRM_1000 ~ .*log_pop18, data = cdi_df) 
+summary(fit_7) # aRs = 0.5958, 3 significant coefs
+
+fit_8 = lm(t_CRM_1000 ~ .*log_poverty, data = cdi_df) 
+summary(fit_8) # aRs = 0.6003, 4 significant coefs
+
+fit_9 = lm(t_CRM_1000 ~ .*log_pcincome, data = cdi_df) 
+summary(fit_9) # aRs = 0.611, 6 significant coefs
+
+fit_10 = lm(t_CRM_1000 ~ .*log_dens, data = cdi_df) 
+summary(fit_10) # aRs = 0.6043, 8 significant coefs!
+
+fit_11 = lm(t_CRM_1000 ~ (region + log_poverty + log_pcincome + log_dens)*log_dens, data = cdi_df) 
+summary(fit_11) # aRs = 0.5884, 8 significant coefs!
+```
+
+I like fit 10 and 11 in addition to fit 4, but let's see how they perform in cross validation
+```{r}
+# Use 5-fold validation and create the training sets
+train = trainControl(method = "cv", number = 5)
+
+# Fit the 3 best looking models and compare performance: the first is fit 4
+model_1 = train(t_CRM_1000 ~ .,
+                   data = cdi_no_out_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_1) # RMSE: 1.056; R^2 = 0.598; MAE: 0.811
+# the second is fit 10
+model_2 = train(t_CRM_1000 ~ .*log_dens,
+                   data = cdi_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_2) # RMSE: 1.066; R^2 = 0.590; MAE: 0.823
+
+# the third is fit 11
+model_3 = train(t_CRM_1000 ~ (region + log_poverty + log_pcincome + log_dens)*log_dens,
+                   data = cdi_df,
+                   trControl = train,
+                   method = 'lm',
+                   na.action = na.pass)
+print(model_3) # RMSE: 1.086; R^2 = 0.585; MAE: 0.844
+
+```
+
+fit 4 may be the best considering law of parsimony, so officially my model has:
+1) region (as indicator variables),
+2) log(percentage of population under 18),
+3) log(percentage of poverty),
+4) log(per capita income), and 
+5) log(population density) as the 5 main effects with no interaction terms in predicting CRM_1000 to the 1/2 power. 
+
+```{r}
+# here it is again
+summary(fit_4)
+```
+
 
