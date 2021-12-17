@@ -16,7 +16,7 @@ get_cor_by_var <- function(v_name) {
   cdi %>%
   map(~cor(as.numeric(.x), pull(cdi, v_name), method = "pearson")) %>%
   as_tibble() %>%
-  pivot_longer(id:log_pop_density,
+  pivot_longer(CRM_1000:log_docbed,
                names_to = "variables",
                values_to = "r") %>%
   mutate(
@@ -106,15 +106,25 @@ rate per 1,000 people in the county population. We will name this column
 ``` r
 cdi <- read_csv(here::here("data", "cdi.csv")) %>%
   mutate(CRM_1000 = (crimes/pop) * 1000,
+         state = as.factor(state),
          region = as.factor(region),
          region = fct_recode(region, "northeast" = "1", "north_central" = "2",
                              "south" = "3", "west" = "4"),
          pop_density = pop/area,
+         docbed = docs/beds,
          log_pop18 = log(pop18),
+         log_pop65 = log(pop65),
+         log_hsgrad = log(hsgrad),
+         log_bagrad = log(bagrad),
          log_poverty = log(poverty),
+         log_unemp = log(unemp),
          log_totalinc = log(totalinc),
          log_pcincome = log(pcincome),
-         log_pop_density = log(pop_density))
+         log_pop_density = log(pop_density),
+         log_docbed = log(docbed)
+         ) %>% 
+  dplyr::select(-id, -cty, -docs, -beds, -crimes, -pop, -area) %>% 
+  dplyr::select(CRM_1000, state, region, everything())
 ```
 
 Let’s calculate the Pearson’s correlation coefficient between every
@@ -127,29 +137,105 @@ get_cor_by_var("CRM_1000")
 | variables         |         r | sign |
 |:------------------|----------:|:-----|
 | CRM\_1000         | 1.0000000 | \+   |
-| crimes            | 0.5300430 | \+   |
 | log\_poverty      | 0.4823623 | \+   |
 | pop\_density      | 0.4804285 | \+   |
 | poverty           | 0.4718442 | \+   |
-| beds              | 0.3915167 | \+   |
-| id                | 0.3756659 | \-   |
 | region            | 0.3427584 | \+   |
 | log\_pop\_density | 0.3367361 | \+   |
 | log\_totalinc     | 0.3273042 | \+   |
-| docs              | 0.3075291 | \+   |
-| pop               | 0.2800992 | \+   |
 | totalinc          | 0.2281557 | \+   |
 | hsgrad            | 0.2264129 | \-   |
+| log\_hsgrad       | 0.2260266 | \-   |
 | log\_pop18        | 0.2039079 | \+   |
 | pop18             | 0.1905688 | \+   |
+| state             | 0.0881015 | \-   |
 | pcincome          | 0.0802442 | \-   |
 | log\_pcincome     | 0.0695287 | \-   |
 | pop65             | 0.0665333 | \-   |
-| area              | 0.0429484 | \+   |
+| log\_bagrad       | 0.0632119 | \+   |
+| log\_pop65        | 0.0543376 | \-   |
+| docbed            | 0.0432661 | \-   |
 | unemp             | 0.0418466 | \+   |
 | bagrad            | 0.0383046 | \+   |
-| cty               |        NA | NA   |
-| state             |        NA | NA   |
+| log\_unemp        | 0.0362602 | \+   |
+| log\_docbed       | 0.0244917 | \+   |
+
+``` r
+cdi_long = 
+  cdi %>% 
+    pivot_longer(
+      pop18:log_docbed,
+      names_to = "var",
+      values_to = "val"
+    ) %>% 
+  mutate(
+    trans = case_when(grepl('log_', var) ~ 'log',
+                     TRUE ~ 'ori'
+    ),
+    trans = factor(trans, levels = c("ori", "log"), labels =c("Untransformed", "log Transformed")),
+    var = str_replace(var, "log_", ""),
+    var = factor(var, levels = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density", "docbed"))
+  )
+
+dens_plot_gen = function(v, b){
+  
+  if(!b){
+    cdi_long %>% 
+      filter(var == v) %>% 
+      ggplot(aes(x = val)) +
+      geom_boxplot() +
+      theme_minimal() +
+      theme(
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.text.x=element_blank()
+      ) +
+      facet_grid(var ~ trans, switch = "y", scales = "free") +
+      theme(
+        strip.text.y.left = element_text(angle = 0),
+        strip.text.x = element_blank()
+      )
+  }else{
+    cdi_long %>% 
+      filter(var == v) %>% 
+      ggplot(aes(x = val)) +
+      geom_boxplot() +
+      theme_minimal() +
+      theme(
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.text.x=element_blank()
+      ) +
+      facet_grid(var ~ trans, switch = "y", scales = "free") +
+      theme(
+        strip.text.y.left = element_text(angle = 0)
+      )
+  }
+}
+
+var_list = c("pop18", "pop65", "hsgrad", "bagrad", "poverty", "unemp", "pcincome", "totalinc", "pop_density", "docbed")
+
+plot_1 = dens_plot_gen(var_list[1], T)
+plot_2 = dens_plot_gen(var_list[2], F)
+plot_3 = dens_plot_gen(var_list[3], F)
+plot_4 = dens_plot_gen(var_list[4], F)
+plot_5 = dens_plot_gen(var_list[5], F)
+plot_6 = dens_plot_gen(var_list[6], F)
+plot_7 = dens_plot_gen(var_list[7], F)
+plot_8 = dens_plot_gen(var_list[8], F)
+plot_9 = dens_plot_gen(var_list[9], F)
+plot_10 = dens_plot_gen(var_list[10], F)
+
+patch_1 = plot_1 / plot_2 / plot_3 / plot_4 / plot_5 / plot_6 / plot_7 / plot_8 / plot_9 / plot_10
+
+patch_1 + 
+  plot_annotation(title = 'Untransformed and log Transformed Variable Distributions in the CDI Dataset',
+                  theme = theme(plot.title = element_text(size = 14)))
+```
+
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
 Now, let’s define models of interest.
 
@@ -200,7 +286,7 @@ map(model_list, get_cv_rmse) %>%
   geom_violin() + labs(x = "Model", y = "RMSE")
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 Further, we can plot the model residuals as a function of the model
 predictions.
@@ -209,19 +295,19 @@ predictions.
 plot_model_residuals(model_A)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_B)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_C)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 Q-Q plots
 
@@ -229,19 +315,19 @@ Q-Q plots
 plot_mod_qq(model_A)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_B)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_C)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 Leverage plots
 
@@ -249,19 +335,19 @@ Leverage plots
 plot_mod_leverage(model_A)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_B)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_C)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 No wonder we had those weird distributions of RMSE in the Monte Carlo
 simulations - we had a serious outlier. Let’s remove it and refit and
@@ -297,64 +383,64 @@ map(model_list, get_cv_rmse, data = cdi_2) %>%
   geom_violin() + labs(x = "Model", y = "RMSE")
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ``` r
 #Residual plots
 plot_model_residuals(model_A, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-2.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-2.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_B, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-3.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-3.png)<!-- -->
 
 ``` r
 plot_model_residuals(model_C, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-4.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-4.png)<!-- -->
 
 ``` r
 #Q-Q plots
 plot_mod_qq(model_A, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-5.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-5.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_B, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-6.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-6.png)<!-- -->
 
 ``` r
 plot_mod_qq(model_C, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-7.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-7.png)<!-- -->
 
 ``` r
 #Leverage plots
 plot_mod_leverage(model_A, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-8.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-8.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_B, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-9.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-9.png)<!-- -->
 
 ``` r
 plot_mod_leverage(model_C, data = cdi_2)
 ```
 
-![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-16-10.png)<!-- -->
+![](p8130_final_project_BG_JA_files/figure-gfm/unnamed-chunk-17-10.png)<!-- -->
 
 For reasons listed in the paper, we will use model C. Let’s summarize
 the model.

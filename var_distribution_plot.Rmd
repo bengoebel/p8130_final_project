@@ -1,6 +1,9 @@
 ```{r, message=F, echo=F}
 library(tidyverse)
 library(patchwork)
+##
+library(corrplot)
+library(performance)
 ## setwd("/Users/beelee/Desktop/Columbia/Fall_2021/P8130-Biostatistical_Methods_1/Project/p8130_final_project/")
 ```
 
@@ -27,6 +30,16 @@ cdi_df =
   ) %>% 
   dplyr::select(-id, -cty, -docs, -beds, -crimes, -pop, -area) %>% 
   dplyr::select(CRM_1000, state, region, everything())
+
+##
+cdi_df_cor =
+  cdi_df %>% 
+  select(-state, -region)
+corrplot(cor(cdi_df_cor), type = "upper", diag = FALSE)
+
+full_fit = lm(CRM_1000 ~ ., data = cdi_df)
+check_collinearity(full_fit)
+##
 
 cdi_df_long = 
   cdi_df %>% 
